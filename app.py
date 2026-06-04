@@ -231,21 +231,29 @@ def upload():
 
         file = request.files.get('file')
 
-        df = pd.read_excel(file)
-        df.columns = df.columns.str.strip()
+        try:
+            df = pd.read_excel(file, nrows=2000)
 
-        Item.query.delete()
+            df.columns = df.columns.str.strip().str.lower()
 
-        for _, row in df.iterrows():
-            db.session.add(Item(
-                codigo_barra=str(row['Unidade comercial']),
-                descricao=row['Produto'],
-                endereco=row['Posição no depósito']
-            ))
+            Item.query.delete()
 
-        db.session.commit()
+            dados = [
+                Item(
+                    codigo_barra=str(r.get('unidade comercial', '')),
+                    descricao=r.get('produto', ''),
+                    endereco=r.get('posição no depósito', '')
+                )
+                for r in df.to_dict(orient="records")
+            ]
 
-        return "✅ Importado com sucesso"
+            db.session.bulk_save_objects(dados)
+            db.session.commit()
+
+            return "✅ Importado com sucesso"
+
+        except Exception as e:
+            return f"❌ Erro no upload: {str(e)}"
 
     return layout("Upload", """
 <input type="file" id="file"><br><br>
@@ -260,7 +268,6 @@ fetch('/upload',{method:'POST',body:f})
 }
 </script>
 """)
-
 # ================= USUÁRIOS =================
 
 @app.route('/usuarios', methods=['GET','POST'])
